@@ -1,4 +1,5 @@
 const express = require('express');
+const { argv } = require('process');
 const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
@@ -9,7 +10,14 @@ var messages = [];
 const users = [];
 const onlineUsers = [];
 var userCounter = 1;
+var port = 3000;
 
+if (argv.length > 2 && argv[2].match(/^[0-9]{4}$/)) {
+    port = parseInt(argv[2]);
+} else {
+    console.log('No port specified. Using 3000');
+    console.log('To specifiy a port, use: node index.js <port number>');
+}
 
 io.on('connection', (socket) => {
     var user = {
@@ -87,8 +95,8 @@ io.on('connection', (socket) => {
     });
 });
   
-http.listen(3000, () => {
-    console.log('listening on *:3000');
+http.listen(port, () => {
+    console.log('listening on *:' + port);
 });
 
 function isDuplicate(name) {
