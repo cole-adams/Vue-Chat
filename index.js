@@ -33,11 +33,13 @@ io.on('connection', (socket) => {
         var oldUser = users.find(element => element.userId == id);
         if (oldUser == null) {
             oldUser = newUser();
-            onlineUsers.push(oldUser);
         } else if (!onlineUsers.includes(oldUser) && isDuplicate(oldUser.username)) {
             oldUser.username = 'User'+userCounter;
             userCounter+=1;
-            onlineUsers.push(user);
+        }
+
+        if (!onlineUsers.includes(oldUser)) {
+            onlineUsers.push(oldUser);
         }
         user = oldUser;
         user.connectedBrowsers+=1;
