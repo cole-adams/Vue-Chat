@@ -14,6 +14,7 @@ var userCounter = 1;
 io.on('connection', (socket) => {
     var user = {
         userId: -1,
+        connectedBrowsers: 0,
         username: '',
         color: ''
     }
@@ -22,6 +23,7 @@ io.on('connection', (socket) => {
 
     socket.on('new user', () => {
         user = newUser();
+        user.connectedBrowsers+=1;
         onlineUsers.push(user);
         socket.emit('user', user);
         io.emit('online users', onlineUsers);
@@ -31,18 +33,23 @@ io.on('connection', (socket) => {
         var oldUser = users.find(element => element.userId == id);
         if (oldUser == null) {
             oldUser = newUser();
-        } else if (isDuplicate(oldUser.username)) {
+            onlineUsers.push(oldUser);
+        } else if (!onlineUsers.includes(oldUser) && isDuplicate(oldUser.username)) {
             oldUser.username = 'User'+userCounter;
             userCounter+=1;
+            onlineUsers.push(user);
         }
         user = oldUser;
-        onlineUsers.push(user);
+        user.connectedBrowsers+=1;
         socket.emit('user', user);
         io.emit('online users', onlineUsers);
     })
 
     socket.on('disconnect', () => {
-        onlineUsers.splice(onlineUsers.indexOf(user), 1);
+        user.connectedBrowsers-=1;
+        if (user.connectedBrowsers <=0){
+            onlineUsers.splice(onlineUsers.indexOf(user), 1);
+        }
         io.emit('online users', onlineUsers);
     });
 
@@ -102,6 +109,7 @@ function newUser() {
     const user = {
         userId : userCounter,
         username: username,
+        connectedBrowsers: 0,
         color : '#' + randomColor
     };
     userCounter+=1;

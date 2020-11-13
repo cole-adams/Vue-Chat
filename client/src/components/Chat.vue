@@ -56,7 +56,7 @@
     </div>
 </template>
 <script lang="ts">
-import { Component, Prop, Vue } from 'vue-property-decorator';
+import { Component, Vue } from 'vue-property-decorator';
 import { MessageItem, User } from '../interfaces';
 import Message from './Message.vue';
 import io from 'socket.io-client';
@@ -140,6 +140,10 @@ export default class Chat extends Vue {
 
         this.socket.on('online users', (users: User[]) =>{
             this.users = users;
+        });
+
+        this.socket.on('duplicate username', (name: string) => {
+            this.displayAlert("The username '" + name + "' is already taken");
         })
     }
 
