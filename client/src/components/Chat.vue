@@ -1,6 +1,11 @@
 <template>
     <div class="window-container d-flex">
         <div class="chat-container d-flex flex-column justify-end">
+            <v-alert
+                v-model="alertState"
+                type="error"
+                dismissible
+            >{{ alertText }}</v-alert>
             <div class="message-container">
                 <div
                     v-for="(line, index) in lines" 
@@ -9,7 +14,7 @@
                     <Message 
                         v-if="line.message"
                         :message="line.message"
-                        :isAuthor="line.message.author.username === user.username"
+                        :isAuthor="line.message.author.userId === user.userId"
                     />
                     <div v-else class="py-2">
                         <div class="text-body-1">{{ line.info }}</div>
@@ -32,15 +37,18 @@
             <v-list>
                 <v-subheader>Online Users</v-subheader>
                 <v-list-item
-                    v-for="(user, index) in users"
+                    v-for="(onlineUser, index) in users"
                     :key="index"
                 >
-                    <v-list-item-avatar :color="user.color" class="justify-center">
-                        <span class="white--text headline">{{ user.username[0].toUpperCase() }}</span>
+                    <v-list-item-avatar :color="onlineUser.color" class="justify-center">
+                        <span class="white--text headline">{{ onlineUser.username[0].toUpperCase() }}</span>
                     </v-list-item-avatar>
 
                     <v-list-item-content>
-                        <v-list-item-title v-text="user.username"></v-list-item-title>
+                        <v-list-item-title
+                            :class="{'font-weight-bold': user.userId=== onlineUser.userId}"
+                        >{{ onlineUser.username }} <span v-if="user.userId === onlineUser.userId">(You)</span>
+                        </v-list-item-title>
                     </v-list-item-content>
                 </v-list-item>
             </v-list>
@@ -62,7 +70,8 @@ export default class Chat extends Vue {
     private socket!: SocketIOClient.Socket;
     private user: User = {
         username: '',
-        color: ''
+        color: '',
+        userId: -1,
     };
     private users: User[] = [];
     private message = '';
@@ -73,17 +82,36 @@ export default class Chat extends Vue {
         {
             command: 'name',
             arguments: -1,
+            minArguments: 1,
             handler: this.changeUsername
         },
         {
             command: 'color',
             arguments: 1,
+            minArguments: 1,
             handler: this.changeColor
         }
     ]
 
+    private alertText = '';
+    private alertState = false;
+
     created() {
-        this.socket = io('localhost:3000');
+        if (process.env.NODE_ENV === 'production'){
+            this.socket = io();
+        } else {
+            this.socket = io('localhost:3000');
+        }
+
+        this.socket.on('connect', () =>{
+            const cookies = document.cookie.split(';');
+            if (cookies.some((item) => item.trim().startsWith('userId'))) {
+                const id = cookies.find(item => item.startsWith('userId'))?.split('=')[1] ?? -1;
+                this.socket.emit('retrieve user', id);
+            } else {
+                this.socket.emit('new user');
+            }
+        })
 
         this.socket.on('chat message', (msg: MessageItem) => {
             this.lines.push({message: msg});
@@ -95,6 +123,7 @@ export default class Chat extends Vue {
 
         this.socket.on('user', (user: User) => {
             this.user = user
+            document.cookie = 'userId=' + user.userId + ';max-age=' + (60*60*24*7); //cookie lasts a week
         });
 
         this.socket.on('chat log', (log: MessageItem[]) =>{
@@ -115,6 +144,7 @@ export default class Chat extends Vue {
     }
 
     handleSubmit() {
+        this.alertState = false;
         if (this.message[0] === '/') {
             this.handleCommand();
         } else {
@@ -124,16 +154,16 @@ export default class Chat extends Vue {
     }
 
     handleCommand() {
-        const command = this.message.substring(1).split(" ");
+        const command = this.message.substring(1).trim().split(" ");
         let matched = false;
         for (const func of this.commands) {
             if (func.command === command[0]) {
                 matched = true;
-                if (func.arguments === command.length-1 || func.arguments === -1) {
+                if ((func.arguments === command.length-1 || func.arguments === -1) && func.minArguments <= command.length-1) {
                     func.handler.apply(this, command.slice(1) as [string]);
                     break;
                 } else {
-                    this.displayAlert('Invalid number of arguments. ' + func.command + ' takes ' + func.arguments + ' argument(s)');
+                    this.displayAlert('Invalid number of arguments. ' + func.command + ' takes ' + func.minArguments + ' argument(s)');
                 }
             }
         }
@@ -148,15 +178,30 @@ export default class Chat extends Vue {
     }
 
     changeColor(newColor: string) {
-        this.socket.emit('change color', '#' + newColor);
+        if (newColor.toLowerCase().match(/^[0-9a-f]{6}$/) != null){
+            this.socket.emit('change color', '#' + newColor);
+        } else {
+            this.displayAlert("'" + newColor + "' is an invalid color. Use hex color codes");
+        }
     }
 
     sendMessage() {
-        this.socket.emit('chat message', this.message);
+        const replacedMessage = this.emojiReplacements(this.message);
+        this.socket.emit('chat message', replacedMessage);
+    }
+
+    emojiReplacements(msg: string): string {
+        const out = msg
+            .replace(/:\)/g, '😁')
+            .replace(/:\(/g, '🙁')
+            .replace(/:o/g, '😲')
+            .replace(/<3/g, '❤️');
+        return out;
     }
 
     displayAlert(msg: string) {
-        console.log("TODO");
+        this.alertText = msg;
+        this.alertState = true;
     }
 
 }

@@ -6,5 +6,6 @@ export interface MessageItem {
 
 export interface User {
     username: string;
+    userId: number;
     color: string;
 }

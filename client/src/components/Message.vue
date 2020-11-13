@@ -18,7 +18,7 @@
                 }"
                 :color="boxColor"
             >
-                <v-card-text>{{ message.content }}</v-card-text>
+                <v-card-text><div class="text--primary">{{ message.content }}</div></v-card-text>
             </v-card>
         </div>
 

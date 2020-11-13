@@ -7,28 +7,43 @@ app.use(express.static('client/dist'));
   
 var messages = [];
 const users = [];
+const onlineUsers = [];
 var userCounter = 1;
 
 
 io.on('connection', (socket) => {
-
-    const username = 'User'+userCounter;
-    const randomColor = Math.floor(Math.random()*16777215).toString(16);
-    const user = {
-        username: username,
-        color: '#' + randomColor
+    var user = {
+        userId: -1,
+        username: '',
+        color: ''
     }
-    users.push(user);
-    socket.emit('user', user);
-    io.emit('online users', users);
-    
-    userCounter+=1;
 
     socket.emit('chat log', messages);
 
+    socket.on('new user', () => {
+        user = newUser();
+        onlineUsers.push(user);
+        socket.emit('user', user);
+        io.emit('online users', onlineUsers);
+    });
+
+    socket.on('retrieve user', (id) => {
+        var oldUser = users.find(element => element.userId == id);
+        if (oldUser == null) {
+            oldUser = newUser();
+        } else if (isDuplicate(oldUser.username)) {
+            oldUser.username = 'User'+userCounter;
+            userCounter+=1;
+        }
+        user = oldUser;
+        onlineUsers.push(user);
+        socket.emit('user', user);
+        io.emit('online users', onlineUsers);
+    })
+
     socket.on('disconnect', () => {
-        users.splice(users.indexOf(user), 1);
-        io.emit('online users', users);
+        onlineUsers.splice(onlineUsers.indexOf(user), 1);
+        io.emit('online users', onlineUsers);
     });
 
     socket.on('chat message', (msg) =>{
@@ -45,19 +60,12 @@ io.on('connection', (socket) => {
     });
 
     socket.on('change username', (name) => {
-        var duplicate = false;
-        for (const u of users) {
-            if (u.username === name) {
-                socket.emit('duplicate username', name);
-                duplicate = true;
-                break;
-            }
-        }
-
-        if (!duplicate) {
+        if (isDuplicate(name)) {
+            socket.emit('duplicate username', name);
+        } else {
             user.username = name;
             socket.emit('user', user);
-            io.emit('online users', users);
+            io.emit('online users', onlineUsers);
             io.emit('chat log', messages);
         }
     });
@@ -65,7 +73,7 @@ io.on('connection', (socket) => {
     socket.on('change color', (color) => {
         user.color = color;
         socket.emit('user', user);
-        io.emit('online users', users);
+        io.emit('online users', onlineUsers);
         io.emit('chat log', messages);
     });
 });
@@ -73,3 +81,31 @@ io.on('connection', (socket) => {
 http.listen(3000, () => {
     console.log('listening on *:3000');
 });
+
+function isDuplicate(name) {
+    for (const u of onlineUsers) {
+        if (u.username === name) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function newUser() {
+    var username = 'User'+userCounter;
+    while(isDuplicate(username)) {
+        userCounter+=1;
+        username = 'User'+userCounter;
+    }
+    const randomColor = Math.floor(Math.random()*16777215).toString(16);
+
+    const user = {
+        userId : userCounter,
+        username: username,
+        color : '#' + randomColor
+    };
+    userCounter+=1;
+
+    users.push(user);
+    return user;
+}
